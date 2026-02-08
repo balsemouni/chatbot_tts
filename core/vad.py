@@ -19,7 +19,7 @@ class VoiceActivityDetector:
         idle_threshold=0.25,
         barge_in_threshold=0.50,
         min_rms=0.005,
-        silence_limit_ms=800,
+        silence_limit_ms=600,
         enable_noise_reduction=True,
         min_chunk_samples=512,
     ):
