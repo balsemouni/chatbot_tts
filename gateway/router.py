@@ -309,6 +309,7 @@ class PipelineRouter:
             raise
         except Exception as e:
             logger.error("STT error: %s", e)
+            await self._send({"type": "error", "message": f"STT error: {str(e)}"})
         finally:
             await word_q.put(None)   # sentinel
 
@@ -412,6 +413,7 @@ class PipelineRouter:
             raise
         except Exception as e:
             logger.error("LLM error: %s", e)
+            await self._send({"type": "error", "message": f"LLM error: {str(e)}"})
         finally:
             self.session.ai_is_thinking = False
             await token_q.put(None)   # sentinel
@@ -599,9 +601,10 @@ class PipelineRouter:
 
     async def _send(self, data: dict):
         try:
+            # Defensive check: if websocket is closed, avoid error
             await self.ws.send_json(data)
         except Exception as e:
-            logger.debug("WS send error: %s", e)
+            logger.debug("WS send error (expected on disconnect): %s", e)
 
     async def cancel_all(self):
         """Graceful shutdown — mirrors _shutdown in the monolith."""

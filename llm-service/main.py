@@ -337,6 +337,7 @@ app = FastAPI(
 class GenerateRequest(BaseModel):
     query:      str           = Field(..., min_length=1)
     session_id: str           = Field("default")
+    history:    Optional[list[dict[str, str]]] = Field(None)
 
 
 class BatchRequest(BaseModel):
@@ -361,6 +362,7 @@ async def _token_stream(
     cag:        CAGSystemFreshSession,
     query:      str,
     session_id: str,
+    history:    Optional[list[dict[str, str]]] = None,
 ) -> AsyncGenerator[str, None]:
     """
     Wraps CAG's synchronous streaming generator for async SSE delivery.
@@ -384,7 +386,7 @@ async def _token_stream(
     # ── producer: runs in thread pool, never touches event loop directly ──
     def _producer():
         try:
-            for chunk in cag.stream_query(query):
+            for chunk in cag.stream_query(query, history=history):
                 if chunk:
                     loop.call_soon_threadsafe(q.put_nowait, ("token", chunk))
         except Exception as exc:
@@ -453,7 +455,7 @@ async def generate_stream(req: GenerateRequest):
 
     The voice agent sends:
         POST /generate/stream
-        {"query": "...", "session_id": "voice-agent"}
+        {"query": "...", "session_id": "voice-agent", "history": [...]}
 
     The session "voice-agent" is auto-created on first call (zero overhead).
     Subsequent calls reuse the same session and its conversation memory.
@@ -467,7 +469,7 @@ async def generate_stream(req: GenerateRequest):
     cag = registry.get_or_create(req.session_id)   # ← the 404 fix
 
     return StreamingResponse(
-        _token_stream(cag, req.query, req.session_id),
+        _token_stream(cag, req.query, req.session_id, history=req.history),
         media_type="text/event-stream",
         headers={
             "Cache-Control":     "no-cache",
@@ -486,7 +488,10 @@ async def generate(req: GenerateRequest):
     """Complete answer in one JSON object. Auto-creates session if needed."""
     cag  = registry.get_or_create(req.session_id)
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, cag.query, req.query)
+    return await loop.run_in_executor(
+        None,
+        lambda: cag.query(req.query, history=req.history)
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════════════

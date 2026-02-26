@@ -147,6 +147,31 @@ class CAGSystemFreshSession:
         """
         self.system_prompt = prompt
 
+    def _sync_history(self, history: list[dict[str, str]]):
+        """Sync internal memory with external history (source of truth)."""
+        if not history or len(history) <= len(self.memory.messages):
+            return
+
+        from conversation_memory import Message
+        self.memory.messages = [
+            Message(role=m["role"], content=m["content"])
+            for m in history if "role" in m and "content" in m
+        ]
+
+        # Ensure name and stage are consistent with history
+        if self.memory.messages and self.memory.stage == ConversationStage.AWAITING_NAME:
+            for msg in self.memory.messages:
+                if msg.role == "user":
+                    name = self.memory.extract_name_from_response(msg.content)
+                    if name:
+                        self.memory.set_user_name(name)
+                        break
+            if self.memory.stage == ConversationStage.AWAITING_NAME:
+                self.memory.stage = ConversationStage.AWAITING_PROBLEM
+
+        # Update query counter to match history length
+        self.total_queries = sum(1 for m in self.memory.messages if m.role == "user")
+
     # ----------------------------------------------------------
     # Memory persistence control
     # ----------------------------------------------------------
@@ -225,10 +250,13 @@ class CAGSystemFreshSession:
     # Core query path
     # ----------------------------------------------------------
 
-    def query(self, query: str) -> Dict[str, Any]:
+    def query(self, query: str, history: Optional[list[dict[str, str]]] = None) -> Dict[str, Any]:
         """Process a query with stage-aware in-session memory."""
         if not self.is_initialized:
             raise ValueError("System not initialized. Call initialize() first.")
+
+        if history:
+            self._sync_history(history)
 
         self.total_queries += 1
 
@@ -320,10 +348,13 @@ class CAGSystemFreshSession:
                 'error': str(e),
             }
 
-    def stream_query(self, query: str) -> Generator[str, None, None]:
+    def stream_query(self, query: str, history: Optional[list[dict[str, str]]] = None) -> Generator[str, None, None]:
         """Stream response token-by-token with stage-aware memory."""
         if not self.is_initialized:
             raise ValueError("System not initialized. Call initialize() first.")
+
+        if history:
+            self._sync_history(history)
 
         self.total_queries += 1
 
