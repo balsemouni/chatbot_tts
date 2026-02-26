@@ -85,8 +85,8 @@ def _build_config() -> CAGConfig:
     )
 
 
-def _make_system(mode: str, config: CAGConfig) -> CAGSystemFreshSession:
-    return CAGSystemWithMemory(config) if mode == "memory" else CAGSystemFreshSession(config)
+def _make_system(mode: str, config: CAGConfig, session_id: str = "default") -> CAGSystemFreshSession:
+    return CAGSystemWithMemory(config, session_id=session_id) if mode == "memory" else CAGSystemFreshSession(config, session_id=session_id)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -147,7 +147,7 @@ class SessionRegistry:
         src = self._sessions["default"]
 
         # 1. Fully-initialized fresh instance (calls __init__ normally)
-        clone = CAGSystemFreshSession(config=src.config)
+        clone = _make_system(mode=self._default_mode, config=src.config, session_id=sid)
 
         # 2. Swap in shared heavy resources — no second GPU load
         clone.model            = src.model            # GPU weights, read-only
@@ -189,7 +189,7 @@ class SessionRegistry:
         with self._lock:
             if session_id in self._sessions:
                 raise ValueError(f"Session '{session_id}' already exists.")
-        sys = _make_system(mode, config)
+        sys = _make_system(mode, config, session_id=session_id)
         sys.initialize(force_cache_rebuild=rebuild_cache)
         with self._lock:
             self._register(session_id, sys, mode)
@@ -337,10 +337,11 @@ app = FastAPI(
 class GenerateRequest(BaseModel):
     query:      str           = Field(..., min_length=1)
     session_id: str           = Field("default")
+    history:    Optional[list[dict]] = None
 
 
 class BatchRequest(BaseModel):
-    questions:  list[str]    = Field(..., min_items=1)
+    questions:  list[str]    = Field(..., min_length=1)
     session_id: str           = Field("default")
 
 
@@ -665,7 +666,7 @@ if __name__ == "__main__":
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=int(os.getenv("PORT", "8000")),
+        port=int(os.getenv("PORT", "8002")),
         reload=False,   # never reload — GPU model is heavy
         workers=1,      # one process per GPU
         log_level="info",
