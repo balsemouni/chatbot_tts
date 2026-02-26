@@ -33,6 +33,7 @@ log utterances in real-time (same as UIHandlerWithHubSpot.add_utterance).
 import json
 import logging
 import os
+import httpx
 
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -157,6 +158,12 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
     finally:
         session_manager.remove(session_id)
         await router.cancel_all()
+        # Notify LLM service to end session and reset its state
+        try:
+            async with httpx.AsyncClient() as client:
+                await client.post(f"{LLM_URL}/session/{session_id}/end")
+        except Exception as e:
+            logger.warning("Failed to notify LLM service of session end for %s: %s", session_id, e)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -285,12 +285,11 @@ def free_gpu_smart(min_mem_mb=100):
 # ======================================================
 
 def force_gpu():
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-
     if not torch.cuda.is_available():
-        print("❌ CUDA NOT AVAILABLE — EXITING")
-        sys.exit(1)
+        print("⚠️ CUDA NOT AVAILABLE — falling back to CPU")
+        return torch.device("cpu")
 
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     torch.cuda.set_device(0)
     torch.cuda.empty_cache()
 

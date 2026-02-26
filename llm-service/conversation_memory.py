@@ -93,16 +93,18 @@ class ConversationMemory:
     6. Optional persistent storage to disk
     """
 
-    def __init__(self, config, max_history: int = 10):
+    def __init__(self, config, max_history: int = 10, session_id: str = "default"):
         """
         Initialize conversation memory.
 
         Args:
             config: CAG configuration object
             max_history: Maximum number of message pairs to keep in memory
+            session_id: ID of the current session
         """
         self.config = config
         self.max_history = max_history
+        self.session_id = session_id
 
         # Memory storage
         self.messages: List[Message] = []
@@ -122,10 +124,10 @@ class ConversationMemory:
         os.makedirs(self.memory_dir, exist_ok=True)
 
         self.conversation_file = os.path.join(
-            self.memory_dir, "conversation_history.json"
+            self.memory_dir, f"conversation_history_{session_id}.json"
         )
         self.profile_file = os.path.join(
-            self.memory_dir, "user_profile.json"
+            self.memory_dir, f"user_profile_{session_id}.json"
         )
 
         # Load existing memory (if persistence is enabled)

@@ -18,7 +18,11 @@ import os
 import sys
 import torch
 import gc
+from datetime import datetime
+from threading import Thread
 from typing import Optional, Dict, Any, Generator
+
+from transformers import TextIteratorStreamer
 
 from cag_config import CAGConfig
 from gpu import free_gpu_smart, force_gpu, get_gpu_memory_info, cleanup_gpu_memory
@@ -100,9 +104,10 @@ class CAGSystemFreshSession:
     only in RAM; nothing persists to disk (KV cache still saved).
     """
 
-    def __init__(self, config: Optional[CAGConfig] = None):
+    def __init__(self, config: Optional[CAGConfig] = None, session_id: str = "default"):
         self.config = config or CAGConfig()
         self.config.enable_cache_persistence = True
+        self.session_id = session_id
 
         # ── Injected system prompt ──────────────────────────────────────
         # test.py's init_agent() sets this via attribute assignment or
@@ -118,6 +123,7 @@ class CAGSystemFreshSession:
         self.memory = ConversationMemory(
             config=self.config,
             max_history=self.config.max_conversation_history,
+            session_id=session_id,
         )
         self._disable_memory_persistence()
 
@@ -164,7 +170,6 @@ class CAGSystemFreshSession:
     # ----------------------------------------------------------
 
     def initialize(self, force_cache_rebuild: bool = False):
-        from datetime import datetime
         self.session_start_time = datetime.now()
 
         print("\n" + "=" * 70)
@@ -369,9 +374,6 @@ class CAGSystemFreshSession:
             )
             input_ids      = inputs.input_ids.to(self.device)
             attention_mask = inputs.attention_mask.to(self.device)
-
-            from transformers import TextIteratorStreamer
-            from threading import Thread
 
             streamer = TextIteratorStreamer(
                 self.tokenizer,
@@ -747,13 +749,14 @@ class CAGSystemWithMemory(CAGSystemFreshSession):
     history are saved to disk so the name is remembered across sessions.
     """
 
-    def __init__(self, config: Optional[CAGConfig] = None):
-        super().__init__(config)
+    def __init__(self, config: Optional[CAGConfig] = None, session_id: str = "default"):
+        super().__init__(config, session_id=session_id)
 
         # Re-create memory WITH disk persistence (undo the fresh-session disable)
         self.memory = ConversationMemory(
             config=self.config,
             max_history=self.config.max_conversation_history,
+            session_id=session_id,
         )
         # Note: do NOT call _disable_memory_persistence() here
 
