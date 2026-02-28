@@ -1,10 +1,12 @@
 """
 synthesizer.py — TTSSynthesizer
-Wraps PocketTTSStreaming / InstantStreamingTTS from tts.py and exposes
-a simple synchronous .synthesize() → bytes interface for the FastAPI service.
+Exposes a simple synchronous .synthesize() → bytes interface for the FastAPI
+service.  Supports three backends: PocketTTS, Piper, Coqui.
 
 The microservice is stateless per-request (no local audio playback).
 Audio is returned as raw WAV bytes so the caller can stream / buffer it.
+
+Local playback is handled by speaker.py (InstantSpeaker).
 """
 
 import io
